@@ -218,6 +218,9 @@ ppb_video_decoder_destroy_priv(void *p)
     }
 
     deinitialize_decoder(vd);
+
+    fclose(vd->fp_bin); vd->fp_bin = NULL;
+    fclose(vd->fp_txt); vd->fp_txt = NULL;
 }
 
 static
@@ -654,6 +657,15 @@ ppb_video_decoder_create(PP_Instance instance, PP_Resource context, PP_VideoDeco
     vd->codec_id = AV_CODEC_ID_H264;        // TODO: other codecs
     vd->hwdec_api = HWDEC_NONE;
 
+    char *fname = g_strdup_printf("/tmp/%d.bitstream", (int)time(NULL));
+    vd->fp_bin = fopen(fname, "wb");
+
+    char *fname2 = g_strdup_printf("%s.txt", fname);
+    vd->fp_txt = fopen(fname2, "wb");
+
+    g_free(fname);
+    g_free(fname2);
+
     pp_resource_release(video_decoder);
     return video_decoder;
 }
@@ -844,6 +856,19 @@ ppb_video_decoder_decode(PP_Resource video_decoder,
 
     uint8_t *inbuf = rawdata;
     size_t   inbuf_sz = bitstream_buffer->size;
+
+    fwrite(inbuf, 1, inbuf_sz, vd->fp_bin); fflush(vd->fp_bin);
+
+    fprintf(vd->fp_txt, "chunk len: %d", (int)inbuf_sz);
+    for (int k = 0; k < (int)inbuf_sz; k ++) {
+        if (k % 16 == 0)
+            fprintf(vd->fp_txt, "\n%08x:", k);
+
+        fprintf(vd->fp_txt, " %02x", inbuf[k]);
+    }
+
+    fprintf(vd->fp_txt, "\n"); fflush(vd->fp_txt);
+
 
     while (inbuf_sz > 0) {
         uint8_t *outbuf = NULL;
